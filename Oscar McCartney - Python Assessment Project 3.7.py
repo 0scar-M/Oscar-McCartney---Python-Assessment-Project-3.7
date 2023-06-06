@@ -1,5 +1,6 @@
 from tkinter import *
-from numpy import sin, cos, tan, sqrt, log10 as log
+from numpy import sin, cos, tan, sqrt, log10 as log, nan, inf
+import numpy as np
 import re
 import os
 
@@ -12,20 +13,23 @@ class GrapherGUI:
         """
         Defines all the variables and widgets that make up the grapher.
         """
+        np.seterr(divide = 'ignore') # stops divide by 0 errors
+        self.scale = 32 # one graph unit is equal to this many screen pixels.
+        self.num_period = 5*self.scale # the period (in pixels) in between the numbers on the x and y axis
+
         self.eq_var = StringVar()
         self.eq_var.trace("w", self.draw) # calls self.draw every time self.entry is changed by the user
 
         self.canvas = Canvas(root, width = 512, height = 512)
         self.canvas.grid(column = 0, columnspan = 2)
 
-        self.canvas.create_line(0, 256, 512, 256) # y-axis line
-        self.canvas.create_line(256, 0, 256, 512) # x-axis line
-
         self.y_label = Label(root, text = "y = ", font = ("Times New Roman Italic", 24))
         self.y_label.grid(row = 2, column = 0)
 
         self.eq_entry = Entry(root, width = 28, font = ("Times New Roman Italic", 24), textvariable = self.eq_var)
         self.eq_entry.grid(row = 2, column = 1)
+        
+        self.canvas_reset()
 
     def draw(self, *args):
         """
@@ -49,33 +53,59 @@ class GrapherGUI:
                 error_char = real
                 break
         
-        self.canvas.delete("all")
-        self.canvas.create_line(0, 256, 512, 256) # y-axis line
-        self.canvas.create_line(256, 0, 256, 512) # x-axis line
+        self.canvas_reset()
 
         if error_char == "":
             points = []
-            self.scale = 32 # one graph unit is equal to 32 screen pixels.
             
             try:
-                for x in range(0, 512):
-                    points.append(x)
-                    x = (x-256)/self.scale # Shifts the y-axis to the middle of the screen and scales the screen so the graph is visible.
-                    points.append((eval(eq)) * -self.scale + 256)
+                for i in range(0, 512):
+                    points.append([i])
+                    x = ((i)-256)/self.scale # Shifts the y-axis to the middle of the screen and scales the screen so the graph is visible.
+                    y = (eval(eq)) * -self.scale + 256
+                    points[i].append(y)
                 
-                if points == [0]:
-                    raise error_char
-                
+                points = [x for x in points if x[1] == x[1] and abs(x[1]) != inf] # any expression involving nan is autmatically False so the only way to check for nan is to check if x[1] is equal to itself.
                 self.canvas.create_line(tuple(points), width = 2, fill = "#000000")
+
             except Exception as e:
-                error_msg = f"{e}"
-        else:
-            error_msg = f"Invalid character: '{error_char}'"
+                error_msg = str(e).split('(<')[0]
         
-        if error_msg != "invalid syntax (<string>, line 0)": # if self.eq_entry is empty don't display an error.
+        else:
+            error_msg = f"Error at character: '{error_char}'"
+        
+        if eq != "": # if eq is empty don't display an error.
             self.canvas.create_text(256+self.y_label.winfo_width(), 500, font = 11, fill = "red", text = error_msg)
-        self.canvas.update()
-        print(error_msg)
+            self.canvas.update()
+
+    def canvas_reset(self):
+        """
+        Clears the canvas and draws the axis lines.
+        """
+        start = -((self.num_period)-(256%(self.num_period))) # x/y coordinate at which the axis lines will start to be drawn
+        self.canvas.delete("all")
+
+        for x in range(start, 512-start, self.scale):
+            self.canvas.create_line(x, 0, x, 512, fill = "#D0D0D0")
+        
+        for y in range(start, 512-start, self.scale):
+            self.canvas.create_line(0, y, 512, y, fill = "#D0D0D0")
+
+        for x in range(start, 512-start, self.num_period):
+            self.canvas.create_line(x, 0, x, 512, fill = "#A0A0A0")
+            x_disp = int((256-x)/-self.scale)
+            if x_disp != 0:
+                self.canvas.create_text(x, 270, text = x_disp, font = ("Times New Roman", 14))
+        
+        for y in range(start, 512-start, self.num_period):
+            self.canvas.create_line(0, y, 512, y, fill = "#A0A0A0")
+            y_disp = int((256-y)/self.scale)
+            if y_disp != 0:
+                self.canvas.create_text(242, y, text = y_disp, font = ("Times New Roman", 14))
+
+        self.canvas.create_text(242, 270, text = "0", font = ("Times New Roman", 14))
+        self.canvas.create_line(0, 256, 512, 256)
+        self.canvas.create_line(256, 0, 256, 512)
 
 
 if __name__ == "__main__":
